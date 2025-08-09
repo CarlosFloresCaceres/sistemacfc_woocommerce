@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\GenericExport;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
 
 class WooCommerceController extends Controller
 {
@@ -32,62 +31,59 @@ class WooCommerceController extends Controller
         $perPage = 8;
         $currentPage = $request->input('page', 1);
 
-         // Llamada a la API con paginación de WooCommerce
-        $products = $this->woocommerce->get('products', ['per_page' => $perPage,
-            'page' => $currentPage]);
+        $products = $this->woocommerce->get('products', [
+            'per_page' => $perPage,
+            'page' => $currentPage
+        ]);
 
-        // Se Obtiene el total desde la cabecera de WooCommerce
         $total = $this->woocommerce->http->getResponse()->getHeaders()['X-WP-Total'][0] ?? count($products);
 
-        // Convertimos el array a colección y lo metemos en un LengthAwarePaginator
-        $productsCollection = collect($products);
         $paginatedProducts = new LengthAwarePaginator(
-        $productsCollection,
-        $total,
-        $perPage,
-        $currentPage,
-        [
-            'path' => $request->url(),
-            'query' => $request->query(),
-        ]
-    );
+            collect($products),
+            $total,
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
         return view('woocommerce.productos', [
-        'products' => $paginatedProducts]);
-
-
-        /*$products = $this->woocommerce->get('products', ['per_page' => 8]);
-        return view('woocommerce.productos', compact('products'));*/
+            'products' => $paginatedProducts
+        ]);
     }
 
-    public function pedidos( Request $request)
+    public function pedidos(Request $request)
     {
         $perPage = 8;
         $currentPage = $request->input('page', 1);
 
-         // Llamada a la API con paginación de WooCommerce
-        $orders = $this->woocommerce->get('orders', ['per_page' => $perPage,
-            'page' => $currentPage]);
+        // Fecha de hace 30 días en formato ISO 8601
+        $date30DaysAgo = now()->subDays(30)->toIso8601String();
 
-        // Se Obtiene el total desde la cabecera de WooCommerce
+        $orders = $this->woocommerce->get('orders', [
+            'per_page' => $perPage,
+            'page' => $currentPage,
+            'after' => $date30DaysAgo
+        ]);
+
         $total = $this->woocommerce->http->getResponse()->getHeaders()['X-WP-Total'][0] ?? count($orders);
 
-        // Convertimos el array a colección y lo metemos en un LengthAwarePaginator
-        $ordersCollection = collect($orders);
         $paginatedOrders = new LengthAwarePaginator(
-        $ordersCollection,
-        $total,
-        $perPage,
-        $currentPage,
-        [
-            'path' => $request->url(),
-            'query' => $request->query(),
-        ]
-    );
-        return view('woocommerce.pedidos', [
-        'orders' => $paginatedOrders]);
+            collect($orders),
+            $total,
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
 
-        /*$orders = $this->woocommerce->get('orders', ['per_page' => 10]);
-        return view('woocommerce.pedidos', compact('orders'));*/
+        return view('woocommerce.pedidos', [
+            'orders' => $paginatedOrders
+        ]);
     }
 
     public function exportar($tipo)
@@ -95,7 +91,11 @@ class WooCommerceController extends Controller
         if ($tipo === 'productos') {
             $data = $this->woocommerce->get('products');
         } elseif ($tipo === 'pedidos') {
-            $data = $this->woocommerce->get('orders');
+            // Exporta solo pedidos de últimos 30 días
+            $date30DaysAgo = now()->subDays(30)->toIso8601String();
+            $data = $this->woocommerce->get('orders', [
+                'after' => $date30DaysAgo
+            ]);
         } else {
             abort(404);
         }
